@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const resetButton = document.getElementById('reset-button');
     const typingIndicator = document.getElementById('typing-indicator');
     
-    // Sua chave de API do Hugging Face (substitua pela sua)
+    // Token de API do Hugging Face
     const HF_API_TOKEN = "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";
     
     // URL da API do Hugging Face para o DialoGPT-medium
