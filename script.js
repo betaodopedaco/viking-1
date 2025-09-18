@@ -12,7 +12,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium";
     
     // Histórico da conversa
-    let conversationHistory = [];
+    let pastUserInputs = [];
+    let generatedResponses = [];
     
     // Adicionar mensagem ao chat
     function addMessage(text, isUser) {
@@ -58,28 +59,24 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Adicionar a mensagem do usuário ao histórico
-            conversationHistory.push({
-                role: "user",
-                content: message
-            });
+            pastUserInputs.push(message);
             
-            // Preparar os dados para a API
+            // Preparar os dados para a API no formato correto para o DialoGPT
             const data = {
                 inputs: {
-                    past_user_inputs: conversationHistory
-                        .filter(msg => msg.role === "user")
-                        .map(msg => msg.content),
-                    generated_responses: conversationHistory
-                        .filter(msg => msg.role === "assistant")
-                        .map(msg => msg.content),
-                    text: message
+                    text: message,
+                    past_user_inputs: pastUserInputs.slice(0, -1), // Todas exceto a última
+                    generated_responses: generatedResponses
                 },
                 parameters: {
                     max_length: 1000,
                     temperature: 0.7,
-                    repetition_penalty: 1.1
+                    repetition_penalty: 1.1,
+                    return_full_text: false
                 }
             };
+            
+            console.log("Enviando para API:", data);
             
             // Fazer a requisição para a API
             const response = await fetch(API_URL, {
@@ -92,19 +89,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (!response.ok) {
-                throw new Error(`Erro na API: ${response.status}`);
+                const errorText = await response.text();
+                console.error('Erro na resposta da API:', response.status, errorText);
+                
+                if (response.status === 503) {
+                    // Modelo está carregando
+                    const errorData = JSON.parse(errorText);
+                    addMessage("O modelo está carregando. Por favor, aguarde alguns segundos e tente novamente.", false);
+                    return;
+                }
+                
+                throw new Error(`Erro na API: ${response.status} - ${errorText}`);
             }
             
             const result = await response.json();
+            console.log("Resposta da API:", result);
             
             // Extrair a resposta
             let botResponse = result.generated_text;
             
             // Adicionar a resposta ao histórico
-            conversationHistory.push({
-                role: "assistant",
-                content: botResponse
-            });
+            generatedResponses.push(botResponse);
             
             // Adicionar a resposta ao chat
             addMessage(botResponse, false);
@@ -112,6 +117,9 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Erro:', error);
             addMessage("Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.", false);
+            
+            // Se ocorrer um erro, remover a última mensagem do usuário do histórico
+            pastUserInputs.pop();
         } finally {
             hideTypingIndicator();
         }
@@ -134,7 +142,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Limpar conversa
     function resetConversation() {
-        conversationHistory = [];
+        pastUserInputs = [];
+        generatedResponses = [];
         chatMessages.innerHTML = '';
         
         // Adicionar mensagem inicial do bot
@@ -154,4 +163,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Focar no campo de entrada ao carregar a página
     messageInput.focus();
+    
+    // Adicionar mensagem inicial do bot
+    setTimeout(() => {
+        addMessage("Olá! Eu sou um assistente virtual baseado no modelo DialoGPT. Como posso ajudar você hoje?", false);
+    }, 500);
 });
